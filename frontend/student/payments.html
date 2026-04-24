@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Payments - HostelIMS</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">My Payments</h1>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="payStats"></div>
+    <div class="table-container">
+      <table class="data-table">
+        <thead><tr><th>Month/Year</th><th>Amount</th><th>Mode</th><th>Due Date</th><th>Paid Date</th><th>Status</th></tr></thead>
+        <tbody id="paymentsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireStudent();
+document.getElementById('sidebar').innerHTML = buildStudentSidebar('Payments');
+
+async function loadPayments() {
+  const res = await API.get('/payments/my') || {};
+  const payments = res.payments || [];
+  const t = res.totals || {};
+
+  document.getElementById('payStats').innerHTML = `
+    <div class="stat-card">
+      <div><div class="stat-card-label">Total Paid</div><div class="stat-card-value" style="font-size:20px;color:var(--green)">${formatCurrency(t.paid_amount)}</div></div>
+      <div class="stat-icon icon-green"><i class="fas fa-check-circle"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Pending</div><div class="stat-card-value">${t.pending_count||0}</div></div>
+      <div class="stat-icon icon-yellow"><i class="fas fa-clock"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Overdue</div><div class="stat-card-value" style="color:var(--red)">${t.overdue_count||0}</div></div>
+      <div class="stat-icon icon-red"><i class="fas fa-circle-exclamation"></i></div>
+    </div>`;
+
+  if (!payments.length) {
+    document.getElementById('paymentsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No payment records found</td></tr>';
+    return;
+  }
+  const months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('paymentsBody').innerHTML = payments.map(p => `
+    <tr>
+      <td>${months[p.month]} ${p.year}</td>
+      <td style="font-weight:600">${formatCurrency(p.amount)}</td>
+      <td>${p.mode||'-'}</td>
+      <td>${formatDate(p.due_date)}</td>
+      <td>${formatDate(p.paid_date)}</td>
+      <td>${getStatusBadge(p.status)}</td>
+    </tr>`).join('');
+}
+
+loadPayments();
+</script>
+</body>
+</html>

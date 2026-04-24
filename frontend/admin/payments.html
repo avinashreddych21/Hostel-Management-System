@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Payments - HostelIMS Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <div class="page-header">
+      <h1 class="page-title">Payment Management</h1>
+      <button class="btn-primary" onclick="showAddPayment()"><i class="fas fa-plus"></i> Add Payment</button>
+    </div>
+    <div class="tab-row">
+      <div class="tabs">
+        <button class="tab active" onclick="filterPayments('all',this)">All</button>
+        <button class="tab" onclick="filterPayments('paid',this)">Paid</button>
+        <button class="tab" onclick="filterPayments('pending',this)">Pending</button>
+        <button class="tab" onclick="filterPayments('overdue',this)">Overdue</button>
+      </div>
+      <div class="tab-stats" id="payStats"></div>
+    </div>
+    <div class="total-revenue" id="totalBox"></div>
+    <div class="table-container">
+      <table class="data-table">
+        <thead><tr><th>Student</th><th>Month/Year</th><th>Amount</th><th>Mode</th><th>Due Date</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="paymentsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireAdmin();
+document.getElementById('sidebar').innerHTML = buildAdminSidebar('Payments');
+
+let allPayments = [], allStudents = [], currentFilter = 'all';
+
+async function loadPayments() {
+  const res = await API.get('/payments') || {};
+  allPayments = res.payments || [];
+  const t = res.totals || {};
+  document.getElementById('payStats').innerHTML = `
+    <span class="tab-stat-green">Paid: ${t.paid_count||0}</span>
+    <span class="tab-stat-orange">Pending: ${t.pending_count||0}</span>
+    <span class="tab-stat-red">Overdue: ${t.overdue_count||0}</span>`;
+  document.getElementById('totalBox').innerHTML = `
+    <div class="stat-icon icon-green"><i class="fas fa-indian-rupee-sign"></i></div>
+    <div><div class="total-revenue-label">Total Collected</div><div class="total-revenue-value">${formatCurrency(t.total_collected)}</div></div>`;
+  renderPayments(allPayments);
+}
+
+async function loadStudents() {
+  allStudents = await API.get('/students') || [];
+}
+
+function filterPayments(status, btn) {
+  currentFilter = status;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = status === 'all' ? allPayments : allPayments.filter(p => p.status === status);
+  renderPayments(filtered);
+}
+
+function renderPayments(list) {
+  if (!list.length) {
+    document.getElementById('paymentsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">No payments found</td></tr>';
+    return;
+  }
+  document.getElementById('paymentsBody').innerHTML = list.map(p => `
+    <tr>
+      <td><div style="font-weight:600">${p.student_name||'Unknown'}</div><div style="font-size:12px;color:var(--text-muted)">${p.roll_number ? p.roll_number + (p.room_number ? ' · Room '+p.room_number : '') : 'N/A'}</div></td>
+      <td>${p.month}/${p.year}</td>
+      <td style="font-weight:600">${formatCurrency(p.amount)}</td>
+      <td>${p.mode||'-'}</td>
+      <td>${formatDate(p.due_date)}</td>
+      <td>${getStatusBadge(p.status)}</td>
+      <td>${(p.status==='pending'||p.status==='overdue') ? `<button class="btn-sm pay" onclick="markPaid(${p.id})"><i class="fas fa-check-circle"></i> Mark Paid</button>` : ''}</td>
+    </tr>`).join('');
+}
+
+async function markPaid(id) {
+  const mode = prompt('Payment mode (Cash/UPI/Bank Transfer/Card):', 'Cash');
+  if (!mode) return;
+  const result = await API.put('/payments/' + id + '/pay', { mode });
+  if (result.ok) { toast('Payment marked as paid!'); loadPayments(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+function showAddPayment() {
+  const studentOpts = allStudents.map(s => `<option value="${s.id}">${s.name} (${s.roll_number})</option>`).join('');
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const html = `
+    <h3>Add Payment <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div class="form-group"><label>Student *</label><select id="pf_stu"><option value="">Select student</option>${studentOpts}</select></div>
+    <div class="form-grid-2">
+      <div class="form-group"><label>Month *</label>
+        <select id="pf_month">${months.map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select>
+      </div>
+      <div class="form-group"><label>Year *</label><input id="pf_year" type="number" value="${now.getFullYear()}"/></div>
+      <div class="form-group"><label>Amount (₹) *</label><input id="pf_amt" type="number" placeholder="Amount"/></div>
+      <div class="form-group"><label>Mode</label>
+        <select id="pf_mode"><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Card</option></select>
+      </div>
+      <div class="form-group"><label>Due Date</label><input id="pf_due" type="date" value="${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-05"/></div>
+      <div class="form-group"><label>Status</label>
+        <select id="pf_status"><option value="paid">Paid</option><option value="pending">Pending</option><option value="overdue">Overdue</option></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="savePayment()">Add Payment</button>
+    </div>`;
+  showModal(html);
+}
+
+async function savePayment() {
+  const data = {
+    student_id: document.getElementById('pf_stu').value || null,
+    amount: document.getElementById('pf_amt').value,
+    month: document.getElementById('pf_month').value,
+    year: document.getElementById('pf_year').value,
+    mode: document.getElementById('pf_mode').value,
+    due_date: document.getElementById('pf_due').value,
+    status: document.getElementById('pf_status').value,
+  };
+  if (!data.amount || !data.month || !data.year) { toast('Fill all required fields', 'error'); return; }
+  const result = await API.post('/payments', data);
+  if (result.ok) { toast('Payment added!'); closeModal(); loadPayments(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+async function init() { await loadStudents(); await loadPayments(); }
+init();
+</script>
+</body>
+</html>

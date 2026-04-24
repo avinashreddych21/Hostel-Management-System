@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Mess Menu - HostelIMS</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+.day-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 24px; }
+.day-tab { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: white; cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap; color: var(--text-muted); transition: all 0.2s; }
+.day-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.day-tab.today-tab { border-color: var(--accent); color: var(--accent); }
+.day-tab.today-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+.meals-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (max-width: 600px) { .meals-grid { grid-template-columns: 1fr; } }
+
+.meal-card { border-radius: 12px; padding: 20px; border: 1px solid; position: relative; overflow: hidden; }
+.meal-card::before { content:''; position:absolute; top:-20px; right:-20px; width:80px; height:80px; border-radius:50%; opacity:0.12; }
+.meal-breakfast { background: #fffbeb; border-color: #fde68a; }
+.meal-breakfast::before { background: #d97706; }
+.meal-lunch { background: #f0fdf4; border-color: #bbf7d0; }
+.meal-lunch::before { background: #16a34a; }
+.meal-snacks { background: #faf5ff; border-color: #e9d5ff; }
+.meal-snacks::before { background: #7c3aed; }
+.meal-dinner { background: #eff6ff; border-color: #bfdbfe; }
+.meal-dinner::before { background: #1d4ed8; }
+
+.meal-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.meal-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.meal-icon-breakfast { background: #fef3c7; color: #d97706; }
+.meal-icon-lunch { background: #dcfce7; color: #16a34a; }
+.meal-icon-snacks { background: #f3e8ff; color: #7c3aed; }
+.meal-icon-dinner { background: #dbeafe; color: #1d4ed8; }
+
+.meal-name { font-size: 15px; font-weight: 700; }
+.meal-time { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.meal-items-list { list-style: none; margin-top: 10px; }
+.meal-items-list li { font-size: 13px; color: var(--text); padding: 4px 0; border-bottom: 1px dashed rgba(0,0,0,0.07); display: flex; align-items: center; gap: 6px; }
+.meal-items-list li:last-child { border-bottom: none; }
+.meal-items-list li::before { content: '•'; font-size: 16px; line-height: 1; opacity: 0.4; }
+.empty-meal { font-size: 13px; color: var(--text-muted); font-style: italic; margin-top: 8px; }
+
+.today-banner { background: linear-gradient(135deg, #1e2a3a, #2d3f56); color: white; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+.today-banner i { font-size: 24px; color: var(--accent); }
+.today-banner-text strong { display: block; font-size: 16px; }
+.today-banner-text span { font-size: 13px; opacity: 0.75; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">Mess Menu</h1>
+
+    <div class="today-banner" id="todayBanner"></div>
+
+    <div class="day-tabs" id="dayTabs"></div>
+
+    <div class="meals-grid" id="mealsGrid">
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)">Loading menu...</div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script>
+requireStudent();
+document.getElementById('sidebar').innerHTML = buildStudentSidebar('Mess Menu');
+
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const MEALS = ['Breakfast','Lunch','Snacks','Dinner'];
+const MEAL_ICONS = { Breakfast: 'fa-mug-hot', Lunch: 'fa-bowl-food', Snacks: 'fa-cookie-bite', Dinner: 'fa-moon' };
+const MEAL_CLASS = { Breakfast: 'breakfast', Lunch: 'lunch', Snacks: 'snacks', Dinner: 'dinner' };
+let menuData = {}, selectedDay = '';
+
+function getTodayName() {
+  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
+}
+
+async function loadMenu() {
+  menuData = await API.get('/mess') || {};
+  const today = getTodayName();
+  selectedDay = today;
+
+  // Today banner
+  const now = new Date();
+  document.getElementById('todayBanner').innerHTML = `
+    <i class="fas fa-calendar-day"></i>
+    <div class="today-banner-text">
+      <strong>Today is ${today}</strong>
+      <span>${now.toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</span>
+    </div>`;
+
+  // Day tabs
+  document.getElementById('dayTabs').innerHTML = DAYS.map(d => `
+    <button class="day-tab ${d===today?'today-tab':''} ${d===selectedDay?'active':''}" onclick="selectDay('${d}',this)">
+      ${d}${d===today?' ★':''}
+    </button>`).join('');
+
+  renderMeals(selectedDay);
+}
+
+function selectDay(day, btn) {
+  selectedDay = day;
+  document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderMeals(day);
+}
+
+function renderMeals(day) {
+  const dayMenu = menuData[day] || {};
+  document.getElementById('mealsGrid').innerHTML = MEALS.map(meal => {
+    const m = dayMenu[meal] || {};
+    const items = m.items ? m.items.split(',').map(i => i.trim()).filter(Boolean) : [];
+    const cls = MEAL_CLASS[meal];
+    return `
+      <div class="meal-card meal-${cls}">
+        <div class="meal-card-header">
+          <div class="meal-icon meal-icon-${cls}"><i class="fas ${MEAL_ICONS[meal]}"></i></div>
+          <div>
+            <div class="meal-name">${meal}</div>
+            ${m.timing ? `<div class="meal-time"><i class="fas fa-clock"></i>${m.timing}</div>` : ''}
+          </div>
+        </div>
+        ${items.length
+          ? `<ul class="meal-items-list">${items.map(i => `<li>${i}</li>`).join('')}</ul>`
+          : `<div class="empty-meal">Menu not set yet</div>`}
+      </div>`;
+  }).join('');
+}
+
+loadMenu();
+</script>
+</body>
+</html>

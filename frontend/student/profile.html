@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>My Profile - HostelIMS</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">My Profile</h1>
+    <div id="profileContent"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireStudent();
+document.getElementById('sidebar').innerHTML = buildStudentSidebar('My Profile');
+
+let studentData = {};
+
+async function loadProfile() {
+  studentData = await API.get('/students/profile');
+  if (!studentData) return;
+  const s = studentData;
+  document.getElementById('profileContent').innerHTML = `
+    <div class="profile-card">
+      <div class="profile-hero">
+        <div class="profile-avatar">${getInitials(s.name)}</div>
+        <div>
+          <div class="profile-name">${s.name}</div>
+          <div class="profile-roll">${s.roll_number}</div>
+          <div style="margin-top:6px">${getStatusBadge(s.status)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div style="font-weight:600;font-size:15px;margin-bottom:16px">Academic Information</div>
+      <div class="info-grid">
+        <div class="info-item"><label><i class="fas fa-graduation-cap"></i> Course</label><strong>${s.course||'-'}</strong></div>
+        <div class="info-item"><label>Year</label><strong>${s.year||'-'}</strong></div>
+        <div class="info-item"><label><i class="fas fa-door-open"></i> Room</label><strong>${s.room_number ? 'Room '+s.room_number : 'Not assigned'}</strong></div>
+        <div class="info-item"><label>Join Date</label><strong>${s.join_date ? new Date(s.join_date).toISOString().split('T')[0] : '-'}</strong></div>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-weight:600;font-size:15px">Contact Details</div>
+        <button class="btn-edit" onclick="showEditContact()"><i class="fas fa-pen"></i> Edit</button>
+      </div>
+      <div class="info-grid">
+        <div class="info-item"><label><i class="fas fa-phone"></i> Phone</label><strong>${s.phone||'-'}</strong></div>
+        <div class="info-item"><label><i class="fas fa-envelope"></i> Email</label><strong>${s.email||'-'}</strong></div>
+        <div class="info-item"><label><i class="fas fa-location-dot"></i> Address</label><strong>${s.address||'-'}</strong></div>
+        <div class="info-item"><label>Guardian</label><strong>${s.guardian_name||'-'} (${s.guardian_phone||'-'})</strong></div>
+      </div>
+    </div>`;
+}
+
+function showEditContact() {
+  const s = studentData;
+  const html = `
+    <h3>Edit Contact Details <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div class="form-group"><label>Phone</label><input id="ep_phone" value="${s.phone||''}"/></div>
+    <div class="form-group"><label>Email</label><input id="ep_email" value="${s.email||''}"/></div>
+    <div class="form-group"><label>Address</label><input id="ep_addr" value="${s.address||''}"/></div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="updateContact()">Save</button>
+    </div>`;
+  showModal(html);
+}
+
+async function updateContact() {
+  const data = {
+    phone: document.getElementById('ep_phone').value.trim(),
+    email: document.getElementById('ep_email').value.trim(),
+    address: document.getElementById('ep_addr').value.trim(),
+  };
+  const result = await API.put('/students/profile/update', data);
+  if (result.ok) { toast('Profile updated!'); closeModal(); loadProfile(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+loadProfile();
+</script>
+</body>
+</html>

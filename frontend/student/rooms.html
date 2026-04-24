@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Book Room - HostelIMS</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">Available Rooms</h1>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:20px">Browse and book an available room for your stay.</p>
+    <div id="alreadyRoomMsg"></div>
+    <div class="cards-grid" id="roomsGrid"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireStudent();
+document.getElementById('sidebar').innerHTML = buildStudentSidebar('Book Room');
+
+let myRoom = null;
+
+async function loadRooms() {
+  const profile = await API.get('/students/profile');
+  myRoom = profile?.room_number;
+
+  if (myRoom) {
+    document.getElementById('alreadyRoomMsg').innerHTML = `
+      <div class="success-msg" style="margin-bottom:20px">
+        <i class="fas fa-check-circle"></i> You are currently assigned to <strong>Room ${myRoom}</strong>.
+        Contact admin to change your room.
+      </div>`;
+  }
+
+  const rooms = await API.get('/rooms/available') || [];
+  if (!rooms.length) {
+    document.getElementById('roomsGrid').innerHTML = '<div class="empty-state"><i class="fas fa-door-open"></i><p>No rooms available at the moment</p></div>';
+    return;
+  }
+
+  document.getElementById('roomsGrid').innerHTML = rooms.map(r => `
+    <div class="room-card">
+      <div class="room-card-header">
+        <div><div class="room-number">Room ${r.room_number}</div><div class="room-sub">Floor ${r.floor} · ${r.type}</div></div>
+        <span class="badge badge-green">Available</span>
+      </div>
+      <div class="card-detail"><i class="fas fa-users"></i> Occupancy <strong style="margin-left:auto">${r.occupied}/${r.capacity}</strong></div>
+      <div class="card-detail">Monthly Rent <strong style="margin-left:auto;color:var(--accent)">${formatCurrency(r.rent)}</strong></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px">${r.amenities||''}</div>
+      ${!myRoom ? `<button class="btn-primary full-width" style="margin-top:14px" onclick="confirmBook(${r.id},'${r.room_number}','${r.type}',${r.floor},'${formatCurrency(r.rent)}')">Book This Room</button>` : ''}
+    </div>`).join('');
+}
+
+function confirmBook(id, num, type, floor, rent) {
+  const html = `
+    <h3>Confirm Room Booking <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px">You are about to book:</p>
+    <div class="confirm-box">
+      <div class="confirm-row"><span>Room</span><strong>${num}</strong></div>
+      <div class="confirm-row"><span>Type</span><strong>${type}</strong></div>
+      <div class="confirm-row"><span>Floor</span><strong>${floor}</strong></div>
+      <div class="confirm-row"><span>Monthly Rent</span><strong>${rent}</strong></div>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted)">By confirming, you agree to the hostel terms and conditions.</p>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="bookRoom(${id})">Confirm Booking</button>
+    </div>`;
+  showModal(html);
+}
+
+async function bookRoom(id) {
+  const result = await API.post('/rooms/book/' + id, {});
+  if (result.ok) { toast(result.data.message || 'Room booked!'); closeModal(); loadRooms(); }
+  else toast(result.data.error || 'Booking failed', 'error');
+}
+
+loadRooms();
+</script>
+</body>
+</html>

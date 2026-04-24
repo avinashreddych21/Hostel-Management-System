@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Complaints - HostelIMS Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">Complaints</h1>
+    <div class="tab-row">
+      <div class="tabs">
+        <button class="tab active" onclick="filterComplaints('all',this)">All</button>
+        <button class="tab" onclick="filterComplaints('open',this)">Open</button>
+        <button class="tab" onclick="filterComplaints('in_progress',this)">In Progress</button>
+        <button class="tab" onclick="filterComplaints('resolved',this)">Resolved</button>
+      </div>
+      <div class="tab-stats" id="compStats"></div>
+    </div>
+    <div id="complaintsList"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireAdmin();
+document.getElementById('sidebar').innerHTML = buildAdminSidebar('Complaints');
+
+let allComplaints = [], staffList = [];
+
+async function loadComplaints() {
+  allComplaints = await API.get('/complaints') || [];
+  const open = allComplaints.filter(c=>c.status==='open').length;
+  const inprog = allComplaints.filter(c=>c.status==='in_progress').length;
+  const resolved = allComplaints.filter(c=>c.status==='resolved').length;
+  document.getElementById('compStats').innerHTML = `
+    <span class="tab-stat-red">Open: ${open}</span>
+    <span class="tab-stat-orange">In Progress: ${inprog}</span>
+    <span class="tab-stat-green">Resolved: ${resolved}</span>`;
+  renderComplaints(allComplaints);
+}
+
+async function loadStaff() {
+  staffList = await API.get('/staff') || [];
+}
+
+function filterComplaints(status, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = status === 'all' ? allComplaints : allComplaints.filter(c => c.status === status);
+  renderComplaints(filtered);
+}
+
+const priorityBadge = { High: 'badge-red', Medium: 'badge-orange', Low: 'badge-gray' };
+const catBadge = { Maintenance: 'badge-gray', Food: 'badge-gray', Noise: 'badge-gray', Security: 'badge-gray', Other: 'badge-gray' };
+
+function renderComplaints(list) {
+  if (!list.length) {
+    document.getElementById('complaintsList').innerHTML = '<div class="empty-state"><i class="fas fa-comment-dots"></i><p>No complaints found</p></div>';
+    return;
+  }
+  document.getElementById('complaintsList').innerHTML = list.map(c => `
+    <div class="complaint-card">
+      <div style="flex:1">
+        <div class="complaint-title">
+          ${c.title}
+          ${getStatusBadge(c.status)}
+          <span class="badge ${priorityBadge[c.priority]||'badge-gray'}">${c.priority} Priority</span>
+          <span class="badge badge-gray">${c.category}</span>
+        </div>
+        <div class="complaint-desc">${c.description||''}</div>
+        <div class="complaint-meta">
+          By: <strong>${c.student_name||'Unknown'}</strong> ${c.roll_number?'('+c.roll_number+')':'(N/A)'}
+          ${c.room_number ? ' &nbsp; Room: '+c.room_number : ''}
+          ${c.assigned_staff_name ? ' &nbsp; Assigned to: <strong>'+c.assigned_staff_name+'</strong>' : ''}
+          &nbsp; ${new Date(c.created_at).toLocaleDateString()}
+        </div>
+      </div>
+      <button class="btn-sm" onclick="showUpdateComplaint(${c.id})"><i class="fas fa-arrow-right"></i> Update</button>
+    </div>`).join('');
+}
+
+function showUpdateComplaint(id) {
+  const c = allComplaints.find(x => x.id === id);
+  const staffOpts = staffList.map(s => `<option value="${s.id}" ${c.assigned_to==s.id?'selected':''}>${s.name} - ${s.role}</option>`).join('');
+  const html = `
+    <h3>Update Complaint <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div style="margin-bottom:12px">
+      <div style="font-weight:600;font-size:16px;margin-bottom:6px">${c.title}</div>
+      <div style="font-size:13px;color:var(--text-muted)">${c.description||''}</div>
+    </div>
+    <div class="form-group"><label>Status</label>
+      <select id="cf_status">
+        <option value="open" ${c.status==='open'?'selected':''}>Open</option>
+        <option value="in_progress" ${c.status==='in_progress'?'selected':''}>In Progress</option>
+        <option value="resolved" ${c.status==='resolved'?'selected':''}>Resolved</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Assign To Staff</label>
+      <select id="cf_staff"><option value="">Not assigned</option>${staffOpts}</select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="updateComplaint(${id})">Update</button>
+    </div>`;
+  showModal(html);
+}
+
+async function updateComplaint(id) {
+  const data = {
+    status: document.getElementById('cf_status').value,
+    assigned_to: document.getElementById('cf_staff').value || null,
+  };
+  const result = await API.put('/complaints/' + id, data);
+  if (result.ok) { toast('Complaint updated!'); closeModal(); loadComplaints(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+async function init() { await loadStaff(); await loadComplaints(); }
+init();
+</script>
+</body>
+</html>

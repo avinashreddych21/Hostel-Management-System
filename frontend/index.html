@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HostelIMS - Hostel Management System</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="login-body">
+<div class="login-container">
+  <!-- Left Panel -->
+  <div class="login-left">
+    <div class="login-brand">
+      <div class="brand-icon"><i class="fas fa-building"></i></div>
+      <h1>HostelIMS</h1>
+      <p>Comprehensive Hostel Management System for colleges and institutions. Manage rooms, students, staff, payments, and more.</p>
+      <div class="login-stats">
+        <div class="stat"><span class="stat-num">300+</span><span>Students</span></div>
+        <div class="stat"><span class="stat-num">150+</span><span>Rooms</span></div>
+        <div class="stat"><span class="stat-num">24/7</span><span>Support</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="login-right">
+    <div class="login-form-box">
+      <h2>Welcome back</h2>
+      <p class="login-sub">Sign in to your account to continue</p>
+
+      <div class="role-toggle">
+        <button class="role-btn active" id="adminBtn" onclick="switchRole('admin')">
+          <i class="fas fa-shield-alt"></i> Admin
+        </button>
+        <button class="role-btn" id="studentBtn" onclick="switchRole('student')">
+          <i class="fas fa-graduation-cap"></i> Student
+        </button>
+      </div>
+
+      <div id="loginForm">
+        <div class="form-group" id="usernameGroup">
+          <label id="usernameLabel">Username</label>
+          <input type="text" id="loginUsername" placeholder="admin" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="Enter your password" />
+        </div>
+        <div id="loginError" class="error-msg" style="display:none"></div>
+        <button class="btn-primary full-width" onclick="handleLogin()">Sign In</button>
+        <p class="register-link">New student? <a href="register.html"><strong>Register here</strong></a></p>
+        <div class="demo-box">
+          <strong>Demo Credentials</strong>
+          <p>Admin: admin/ admin123</p>
+          <p>Student: S001/ student123</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentRole = 'admin';
+
+function switchRole(role) {
+  currentRole = role;
+  document.getElementById('adminBtn').classList.toggle('active', role === 'admin');
+  document.getElementById('studentBtn').classList.toggle('active', role === 'student');
+  document.getElementById('usernameLabel').textContent = role === 'admin' ? 'Username' : 'Roll Number';
+  document.getElementById('loginUsername').placeholder = role === 'admin' ? 'admin' : 'e.g. S001';
+}
+
+async function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+
+  if (!username || !password) { errEl.textContent = 'Please fill in all fields'; errEl.style.display = 'block'; return; }
+
+  try {
+    const endpoint = currentRole === 'admin' ? '/api/auth/admin/login' : '/api/auth/student/login';
+    const body = currentRole === 'admin' ? { username, password } : { roll_number: username, password };
+    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Login failed'; errEl.style.display = 'block'; return; }
+
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    window.location.href = currentRole === 'admin' ? 'admin/dashboard.html' : 'student/dashboard.html';
+  } catch (e) {
+    errEl.textContent = 'Server error. Make sure backend is running.'; errEl.style.display = 'block';
+  }
+}
+
+document.addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
+</script>
+</body>
+</html>

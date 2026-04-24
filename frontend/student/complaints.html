@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Complaints - HostelIMS</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <div class="page-header">
+      <h1 class="page-title">My Complaints</h1>
+      <button class="btn-primary" onclick="showComplaintForm()"><i class="fas fa-plus"></i> New Complaint</button>
+    </div>
+    <div class="record-count" id="countEl"></div>
+    <div id="complaintsList"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireStudent();
+document.getElementById('sidebar').innerHTML = buildStudentSidebar('Complaints');
+
+let complaints = [];
+
+async function loadComplaints() {
+  complaints = await API.get('/complaints/my') || [];
+  document.getElementById('countEl').textContent = `${complaints.length} complaint(s)`;
+  if (!complaints.length) {
+    document.getElementById('complaintsList').innerHTML = '<div class="empty-state"><i class="fas fa-comment-dots"></i><p>No complaints submitted yet</p></div>';
+    return;
+  }
+  const priorityBadge = { High: 'badge-red', Medium: 'badge-orange', Low: 'badge-gray' };
+  document.getElementById('complaintsList').innerHTML = complaints.map(c => `
+    <div class="complaint-card">
+      <div style="flex:1">
+        <div class="complaint-title">
+          ${c.title}
+          ${getStatusBadge(c.status)}
+          <span class="badge ${priorityBadge[c.priority]||'badge-gray'}">${c.priority} Priority</span>
+          <span class="badge badge-gray">${c.category}</span>
+        </div>
+        <div class="complaint-desc">${c.description||''}</div>
+        <div class="complaint-meta">
+          Submitted: ${new Date(c.created_at).toLocaleDateString()}
+          ${c.assigned_staff_name ? ' · Assigned to: <strong>'+c.assigned_staff_name+'</strong>' : ''}
+          ${c.resolved_date ? ' · Resolved: '+formatDate(c.resolved_date) : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function showComplaintForm() {
+  const html = `
+    <h3>Submit a Complaint <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div class="form-group"><label>Title</label><input id="cf_title" placeholder="Brief title..."/></div>
+    <div class="form-group"><label>Description</label><textarea id="cf_desc" rows="4" placeholder="Describe the issue in detail..."></textarea></div>
+    <div class="form-grid-2">
+      <div class="form-group"><label>Category</label>
+        <select id="cf_cat">
+          <option>Maintenance</option><option>Food</option><option>Noise</option><option>Security</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Priority</label>
+        <select id="cf_pri">
+          <option>Low</option><option selected>Medium</option><option>High</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitComplaint()">Submit Complaint</button>
+    </div>`;
+  showModal(html);
+}
+
+async function submitComplaint() {
+  const data = {
+    title: document.getElementById('cf_title').value.trim(),
+    description: document.getElementById('cf_desc').value.trim(),
+    category: document.getElementById('cf_cat').value,
+    priority: document.getElementById('cf_pri').value,
+  };
+  if (!data.title) { toast('Please enter a title', 'error'); return; }
+  const result = await API.post('/complaints', data);
+  if (result.ok) { toast('Complaint submitted!'); closeModal(); loadComplaints(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+loadComplaints();
+</script>
+</body>
+</html>

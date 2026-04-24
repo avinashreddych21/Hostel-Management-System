@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>My Dashboard - HostelIMS</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">My Dashboard</h1>
+    <div id="welcomeBox" style="margin-bottom:20px"></div>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)" id="statsGrid"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px" id="bottomGrid"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireStudent();
+document.getElementById('sidebar').innerHTML = buildStudentSidebar('Dashboard');
+
+async function loadDashboard() {
+  const data = await API.get('/dashboard/student');
+  if (!data) return;
+  const { student, pending_payments, open_complaints, recent_complaints, recent_payments } = data;
+
+  document.getElementById('welcomeBox').innerHTML = `
+    <div style="font-size:22px;font-weight:700">Welcome, ${student.name}!</div>
+    <div style="color:var(--text-muted);font-size:14px;margin-top:4px">Here's a summary of your hostel stay.</div>`;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card">
+      <div><div class="stat-card-label">Room Number</div><div class="stat-card-value" style="font-size:20px">${student.room_number ? 'Room '+student.room_number : 'Not assigned'}</div></div>
+      <div class="stat-icon icon-blue"><i class="fas fa-door-open"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Pending Payments</div><div class="stat-card-value">${pending_payments}</div></div>
+      <div class="stat-icon icon-red"><i class="fas fa-circle-exclamation"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Open Complaints</div><div class="stat-card-value">${open_complaints}</div></div>
+      <div class="stat-icon icon-orange"><i class="fas fa-comment-dots"></i></div>
+    </div>`;
+
+  document.getElementById('bottomGrid').innerHTML = `
+    <div class="activity-card">
+      <h3><i class="fas fa-credit-card" style="margin-right:8px;color:var(--accent)"></i>Pending Payments</h3>
+      ${recent_payments.length === 0 
+        ? '<div style="color:var(--green);font-size:13px;display:flex;align-items:center;gap:6px"><i class="fas fa-check-circle"></i> All payments are up to date!</div>'
+        : recent_payments.map(p => `
+          <div class="activity-item">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${formatCurrency(p.amount)} - ${p.month}/${p.year}</div>
+              <div style="font-size:12px;color:var(--text-muted)">Due: ${formatDate(p.due_date)}</div>
+            </div>
+            ${getStatusBadge(p.status)}
+          </div>`).join('')}
+    </div>
+    <div class="activity-card">
+      <h3><i class="fas fa-comment-dots" style="margin-right:8px;color:var(--accent)"></i>My Complaints</h3>
+      ${recent_complaints.length === 0
+        ? '<div style="color:var(--text-muted);font-size:13px">No open complaints</div>'
+        : recent_complaints.map(c => `
+          <div class="activity-item">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${c.title}</div>
+              <div style="font-size:12px;color:var(--text-muted)">${new Date(c.created_at).toLocaleDateString()}</div>
+            </div>
+            ${getStatusBadge(c.status)}
+          </div>`).join('')}
+    </div>`;
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

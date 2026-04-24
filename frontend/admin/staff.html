@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Staff - HostelIMS Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <div class="page-header">
+      <h1 class="page-title">Staff Management</h1>
+      <button class="btn-primary" onclick="showStaffForm()"><i class="fas fa-plus"></i> Add Staff</button>
+    </div>
+    <div class="record-count" id="countEl"></div>
+    <div class="cards-grid" id="staffGrid"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireAdmin();
+document.getElementById('sidebar').innerHTML = buildAdminSidebar('Staff');
+
+let staffList = [];
+
+async function loadStaff() {
+  staffList = await API.get('/staff') || [];
+  document.getElementById('countEl').textContent = `${staffList.length} staff members`;
+  document.getElementById('staffGrid').innerHTML = staffList.map(s => `
+    <div class="card">
+      <div class="card-header">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="card-avatar">${getInitials(s.name)}</div>
+          <div><div class="card-name">${s.name}</div><div class="card-role">${s.role}</div></div>
+        </div>
+        <span class="badge-dark">${s.status}</span>
+      </div>
+      <div class="card-detail"><i class="fas fa-envelope"></i>${s.email||'-'}</div>
+      <div class="card-detail"><i class="fas fa-phone"></i>${s.phone||'-'}</div>
+      <div class="card-detail">Department: <strong>${s.department||'-'}</strong></div>
+      <div class="card-detail">Salary: <strong>${formatCurrency(s.salary)}/mo</strong></div>
+      <div class="card-detail">Joined: <strong>${s.join_date||'-'}</strong></div>
+      <div class="card-actions">
+        <button class="btn-edit" onclick="showStaffForm(${s.id})"><i class="fas fa-pen"></i> Edit</button>
+        <button class="btn-danger" onclick="deleteStaff(${s.id},'${s.name}')"><i class="fas fa-trash"></i> Remove</button>
+      </div>
+    </div>`).join('');
+}
+
+function showStaffForm(id = null) {
+  const s = id ? staffList.find(x => x.id === id) : {};
+  const html = `
+    <h3>${id ? 'Edit Staff' : 'Add Staff'} <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div class="form-grid-2">
+      <div class="form-group"><label>Full Name *</label><input id="sf_name" value="${s.name||''}" placeholder="Full name"/></div>
+      <div class="form-group"><label>Role *</label><input id="sf_role" value="${s.role||''}" placeholder="e.g. Warden"/></div>
+      <div class="form-group"><label>Department</label><input id="sf_dept" value="${s.department||''}" placeholder="e.g. Administration"/></div>
+      <div class="form-group"><label>Email</label><input id="sf_email" value="${s.email||''}" placeholder="email@hostel.com"/></div>
+      <div class="form-group"><label>Phone</label><input id="sf_phone" value="${s.phone||''}" placeholder="Phone number"/></div>
+      <div class="form-group"><label>Salary (₹/mo)</label><input id="sf_salary" type="number" value="${s.salary||''}" placeholder="Monthly salary"/></div>
+      <div class="form-group"><label>Join Date</label><input id="sf_join" type="date" value="${s.join_date||''}"/></div>
+      ${id ? `<div class="form-group"><label>Status</label><select id="sf_status"><option value="active" ${s.status==='active'?'selected':''}>Active</option><option value="inactive" ${s.status==='inactive'?'selected':''}>Inactive</option></select></div>` : ''}
+    </div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveStaff(${id||'null'})">${id ? 'Update' : 'Add Staff'}</button>
+    </div>`;
+  showModal(html);
+}
+
+async function saveStaff(id) {
+  const data = {
+    name: document.getElementById('sf_name').value.trim(),
+    role: document.getElementById('sf_role').value.trim(),
+    department: document.getElementById('sf_dept').value.trim(),
+    email: document.getElementById('sf_email').value.trim(),
+    phone: document.getElementById('sf_phone').value.trim(),
+    salary: document.getElementById('sf_salary').value,
+    join_date: document.getElementById('sf_join').value,
+    status: id ? document.getElementById('sf_status').value : 'active',
+  };
+  if (!data.name || !data.role) { toast('Name and role are required', 'error'); return; }
+  const result = id ? await API.put('/staff/' + id, data) : await API.post('/staff', data);
+  if (result.ok) { toast(id ? 'Staff updated!' : 'Staff added!'); closeModal(); loadStaff(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+async function deleteStaff(id, name) {
+  if (!confirm(`Remove ${name} from staff?`)) return;
+  const result = await API.delete('/staff/' + id);
+  if (result.ok) { toast('Staff removed'); loadStaff(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+loadStaff();
+</script>
+</body>
+</html>

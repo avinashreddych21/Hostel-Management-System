@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Rooms - HostelIMS Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <div class="page-header">
+      <h1 class="page-title">Room Management</h1>
+      <button class="btn-primary" onclick="showRoomForm()"><i class="fas fa-plus"></i> Add Room</button>
+    </div>
+    <div class="tab-row" style="margin-bottom:20px">
+      <div class="tabs">
+        <button class="tab active" onclick="filterRooms('all',this)">All Rooms</button>
+        <button class="tab" onclick="filterRooms('available',this)">Available</button>
+        <button class="tab" onclick="filterRooms('occupied',this)">Occupied</button>
+        <button class="tab" onclick="filterRooms('maintenance',this)">Maintenance</button>
+      </div>
+      <div class="tab-stats" id="roomStats"></div>
+    </div>
+    <div class="cards-grid" id="roomsGrid"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireAdmin();
+document.getElementById('sidebar').innerHTML = buildAdminSidebar('Rooms');
+
+let allRooms = [];
+
+async function loadRooms() {
+  allRooms = await API.get('/rooms') || [];
+  const av = allRooms.filter(r=>r.status==='available').length;
+  const oc = allRooms.filter(r=>r.status==='occupied').length;
+  const mn = allRooms.filter(r=>r.status==='maintenance').length;
+  document.getElementById('roomStats').innerHTML = `
+    <span style="color:#22c55e">● Available: ${av}</span>
+    <span style="color:#3b82f6">● Occupied: ${oc}</span>
+    <span style="color:#f97316">● Maintenance: ${mn}</span>`;
+  renderRooms(allRooms);
+}
+
+function filterRooms(status, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = status === 'all' ? allRooms : allRooms.filter(r => r.status === status);
+  renderRooms(filtered);
+}
+
+function renderRooms(rooms) {
+  if (!rooms.length) { document.getElementById('roomsGrid').innerHTML = '<div class="empty-state"><i class="fas fa-door-open"></i><p>No rooms found</p></div>'; return; }
+  const statusBadge = { available:'badge-green', occupied:'badge-blue', maintenance:'badge-orange' };
+  document.getElementById('roomsGrid').innerHTML = rooms.map(r => {
+    const pct = r.capacity > 0 ? (r.occupied / r.capacity) * 100 : 0;
+    return `
+    <div class="room-card">
+      <div class="room-card-header">
+        <div><div class="room-number">Room ${r.room_number}</div><div class="room-sub">Floor ${r.floor} · ${r.type}</div></div>
+        <span class="badge ${statusBadge[r.status]||'badge-gray'}">${r.status}</span>
+      </div>
+      <div class="card-detail"><i class="fas fa-users"></i> Occupancy</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${r.occupied}/${r.capacity}</span></div>
+      <div class="occupancy-bar"><div class="occupancy-fill" style="width:${pct}%"></div></div>
+      <div class="card-detail" style="margin-top:8px">Rent <strong>${formatCurrency(r.rent)}/mo</strong></div>
+      ${r.student_names ? `<div class="card-detail">Students: <strong>${r.student_names}</strong></div>` : ''}
+      <div class="card-detail" style="font-size:12px;color:var(--text-muted)">${r.amenities||''}</div>
+      <div class="card-actions">
+        <button class="btn-edit" onclick="showRoomForm(${r.id})"><i class="fas fa-pen"></i> Edit</button>
+        <button class="btn-danger" onclick="deleteRoom(${r.id},'${r.room_number}')"><i class="fas fa-trash"></i> Delete</button>
+      </div>
+    </div>`}).join('');
+}
+
+function showRoomForm(id = null) {
+  const r = id ? allRooms.find(x => x.id === id) : {};
+  const html = `
+    <h3>${id ? 'Edit Room' : 'Add Room'} <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div class="form-grid-2">
+      <div class="form-group"><label>Room Number *</label><input id="rf_num" value="${r.room_number||''}" placeholder="e.g. 101"/></div>
+      <div class="form-group"><label>Floor *</label><input id="rf_floor" type="number" value="${r.floor||''}" placeholder="Floor no."/></div>
+      <div class="form-group"><label>Type *</label>
+        <select id="rf_type">
+          ${['Single','Double','Triple','Dormitory'].map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Capacity *</label><input id="rf_cap" type="number" value="${r.capacity||''}" placeholder="Max occupants"/></div>
+      <div class="form-group"><label>Rent (₹/mo) *</label><input id="rf_rent" type="number" value="${r.rent||''}" placeholder="Monthly rent"/></div>
+      ${id ? `<div class="form-group"><label>Status</label>
+        <select id="rf_status">
+          ${['available','occupied','maintenance'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}
+        </select></div>` : ''}
+    </div>
+    <div class="form-group"><label>Amenities</label><input id="rf_amen" value="${r.amenities||''}" placeholder="e.g. AC, WiFi, Attached Bathroom"/></div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveRoom(${id||'null'})">${id ? 'Update' : 'Add Room'}</button>
+    </div>`;
+  showModal(html);
+}
+
+async function saveRoom(id) {
+  const data = {
+    room_number: document.getElementById('rf_num').value.trim(),
+    floor: document.getElementById('rf_floor').value,
+    type: document.getElementById('rf_type').value,
+    capacity: document.getElementById('rf_cap').value,
+    rent: document.getElementById('rf_rent').value,
+    amenities: document.getElementById('rf_amen').value.trim(),
+    status: id ? document.getElementById('rf_status').value : 'available',
+  };
+  if (!data.room_number || !data.floor || !data.capacity || !data.rent) { toast('Fill all required fields', 'error'); return; }
+  const result = id ? await API.put('/rooms/' + id, data) : await API.post('/rooms', data);
+  if (result.ok) { toast(id ? 'Room updated!' : 'Room added!'); closeModal(); loadRooms(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+async function deleteRoom(id, num) {
+  if (!confirm(`Delete Room ${num}? This cannot be undone.`)) return;
+  const result = await API.delete('/rooms/' + id);
+  if (result.ok) { toast('Room deleted'); loadRooms(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+loadRooms();
+</script>
+</body>
+</html>

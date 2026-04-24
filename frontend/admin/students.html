@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Students - HostelIMS Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <div class="page-header">
+      <h1 class="page-title">Student Management</h1>
+      <button class="btn-primary" onclick="showStudentForm()"><i class="fas fa-user-plus"></i> Add Student</button>
+    </div>
+    <div class="search-bar">
+      <div class="search-input">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Search name, roll number, email..." oninput="searchStudents()"/>
+      </div>
+      <select class="filter-select" id="statusFilter" onchange="searchStudents()">
+        <option value="">All Status</option>
+        <option value="active">Active</option>
+        <option value="pending">Pending</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </div>
+    <div class="table-container">
+      <table class="data-table">
+        <thead><tr>
+          <th>Student</th><th>Course</th><th>Room</th><th>Contact</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="studentsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireAdmin();
+document.getElementById('sidebar').innerHTML = buildAdminSidebar('Students');
+
+let allStudents = [], allRooms = [];
+
+async function loadStudents() {
+  const search = document.getElementById('searchInput').value;
+  const status = document.getElementById('statusFilter').value;
+  let url = '/students?';
+  if (search) url += `search=${encodeURIComponent(search)}&`;
+  if (status) url += `status=${status}`;
+  allStudents = await API.get(url) || [];
+  renderStudents(allStudents);
+}
+
+async function loadRooms() {
+  allRooms = await API.get('/rooms') || [];
+}
+
+function searchStudents() { loadStudents(); }
+
+function renderStudents(list) {
+  if (!list.length) {
+    document.getElementById('studentsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No students found</td></tr>';
+    return;
+  }
+  document.getElementById('studentsBody').innerHTML = list.map(s => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="card-avatar" style="width:36px;height:36px;font-size:14px">${getInitials(s.name)}</div>
+          <div><div style="font-weight:600">${s.name}</div><div style="font-size:12px;color:var(--text-muted)">${s.roll_number}</div></div>
+        </div>
+      </td>
+      <td><div>${s.course||'-'}</div><div style="font-size:12px;color:var(--text-muted)">${s.year||''}</div></td>
+      <td>${s.room_number ? `<span style="display:flex;align-items:center;gap:4px;font-size:13px"><i class="fas fa-door-open" style="color:var(--text-muted)"></i>Room ${s.room_number}</span>` : '<span style="color:var(--text-muted);font-size:13px">Not assigned</span>'}</td>
+      <td>
+        <div style="font-size:13px"><i class="fas fa-phone" style="color:var(--text-muted);margin-right:4px"></i>${s.phone||'-'}</div>
+        <div style="font-size:12px;color:var(--text-muted)"><i class="fas fa-envelope" style="margin-right:4px"></i>${s.email||'-'}</div>
+      </td>
+      <td>${getStatusBadge(s.status)}</td>
+      <td>
+        <button class="btn-edit" style="margin-right:6px" onclick="showStudentForm(${s.id})"><i class="fas fa-pen"></i></button>
+        <button class="btn-danger" onclick="deleteStudent(${s.id},'${s.name}')"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+function showStudentForm(id = null) {
+  const s = id ? allStudents.find(x => x.id === id) : {};
+  const roomOptions = allRooms.map(r => `<option value="${r.id}" ${s.room_id==r.id?'selected':''}>Room ${r.room_number} (${r.type}) - ${r.occupied}/${r.capacity}</option>`).join('');
+  const html = `
+    <h3>${id ? 'Edit Student' : 'Add Student'} <span class="modal-close" onclick="closeModal()">✕</span></h3>
+    <div class="form-grid-2">
+      <div class="form-group"><label>Full Name *</label><input id="stf_name" value="${s.name||''}" placeholder="Full name"/></div>
+      <div class="form-group"><label>Roll Number *</label><input id="stf_roll" value="${s.roll_number||''}" placeholder="e.g. S001" ${id?'readonly':''}/></div>
+      <div class="form-group"><label>Email *</label><input id="stf_email" value="${s.email||''}" placeholder="email@example.com"/></div>
+      <div class="form-group"><label>Phone</label><input id="stf_phone" value="${s.phone||''}" placeholder="Phone number"/></div>
+      <div class="form-group"><label>Course</label><input id="stf_course" value="${s.course||''}" placeholder="e.g. B.Tech"/></div>
+      <div class="form-group"><label>Year</label>
+        <select id="stf_year">${['Year 1','Year 2','Year 3','Year 4'].map(y=>`<option ${s.year===y?'selected':''}>${y}</option>`).join('')}</select>
+      </div>
+      <div class="form-group"><label>Room</label>
+        <select id="stf_room"><option value="">Not assigned</option>${roomOptions}</select>
+      </div>
+      ${id ? `<div class="form-group"><label>Status</label>
+        <select id="stf_status">${['active','pending','inactive'].map(st=>`<option value="${st}" ${s.status===st?'selected':''}>${st}</option>`).join('')}</select>
+      </div>` : `<div class="form-group"><label>Password</label><input id="stf_pass" type="password" placeholder="Default: student123"/></div>`}
+    </div>
+    <div class="form-group"><label>Address</label><input id="stf_addr" value="${s.address||''}" placeholder="Address"/></div>
+    <div class="form-grid-2">
+      <div class="form-group"><label>Guardian Name</label><input id="stf_gname" value="${s.guardian_name||''}" placeholder="Guardian name"/></div>
+      <div class="form-group"><label>Guardian Phone</label><input id="stf_gphone" value="${s.guardian_phone||''}" placeholder="Guardian phone"/></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveStudent(${id||'null'})">${id ? 'Update' : 'Add Student'}</button>
+    </div>`;
+  showModal(html);
+}
+
+async function saveStudent(id) {
+  const data = {
+    name: document.getElementById('stf_name').value.trim(),
+    roll_number: document.getElementById('stf_roll').value.trim(),
+    email: document.getElementById('stf_email').value.trim(),
+    phone: document.getElementById('stf_phone').value.trim(),
+    course: document.getElementById('stf_course').value.trim(),
+    year: document.getElementById('stf_year').value,
+    room_id: document.getElementById('stf_room').value || null,
+    address: document.getElementById('stf_addr').value.trim(),
+    guardian_name: document.getElementById('stf_gname').value.trim(),
+    guardian_phone: document.getElementById('stf_gphone').value.trim(),
+    status: id ? document.getElementById('stf_status').value : 'active',
+  };
+  if (!id) data.password = document.getElementById('stf_pass').value || 'student123';
+  if (!data.name || !data.roll_number || !data.email) { toast('Name, roll number, and email are required', 'error'); return; }
+  const result = id ? await API.put('/students/' + id, data) : await API.post('/students', data);
+  if (result.ok) { toast(id ? 'Student updated!' : 'Student added!'); closeModal(); loadStudents(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+async function deleteStudent(id, name) {
+  if (!confirm(`Delete student ${name}? This cannot be undone.`)) return;
+  const result = await API.delete('/students/' + id);
+  if (result.ok) { toast('Student deleted'); loadStudents(); }
+  else toast(result.data.error || 'Failed', 'error');
+}
+
+async function init() { await loadRooms(); await loadStudents(); }
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Dashboard - HostelIMS Admin</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main-content">
+    <h1 class="page-title">Dashboard</h1>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div><div class="stat-card-label">Loading...</div></div></div>
+    </div>
+    <div class="activity-card" id="activityCard"></div>
+  </div>
+</div>
+<script src="../js/app.js"></script>
+<script>
+requireAdmin();
+document.getElementById('sidebar').innerHTML = buildAdminSidebar('Dashboard');
+
+async function loadDashboard() {
+  const data = await API.get('/dashboard/stats');
+  if (!data) return;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card">
+      <div><div class="stat-card-label">Total Students</div><div class="stat-card-value">${data.total_students}</div><div class="stat-card-sub">${data.active_students} active</div></div>
+      <div class="stat-icon icon-blue"><i class="fas fa-user-graduate"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Available Rooms</div><div class="stat-card-value">${data.available_rooms}</div><div class="stat-card-sub">${data.occupied_rooms} occupied</div></div>
+      <div class="stat-icon icon-green"><i class="fas fa-door-open"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Total Staff</div><div class="stat-card-value">${data.total_staff}</div></div>
+      <div class="stat-icon icon-purple"><i class="fas fa-users-gear"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Occupancy Rate</div><div class="stat-card-value">${data.occupancy_rate}%</div><div class="stat-card-sub">${data.total_rooms} total rooms</div></div>
+      <div class="stat-icon icon-yellow"><i class="fas fa-chart-line"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Monthly Revenue</div><div class="stat-card-value">${formatCurrency(data.monthly_revenue)}</div></div>
+      <div class="stat-icon icon-green"><i class="fas fa-indian-rupee-sign"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Total Revenue</div><div class="stat-card-value">${formatCurrency(data.total_revenue)}</div></div>
+      <div class="stat-icon icon-teal"><i class="fas fa-credit-card"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Pending Payments</div><div class="stat-card-value">${data.pending_payments}</div></div>
+      <div class="stat-icon icon-red"><i class="fas fa-circle-exclamation"></i></div>
+    </div>
+    <div class="stat-card">
+      <div><div class="stat-card-label">Open Complaints</div><div class="stat-card-value">${data.open_complaints}</div><div class="stat-card-sub">${data.resolved_complaints} resolved</div></div>
+      <div class="stat-icon icon-orange"><i class="fas fa-comment-dots"></i></div>
+    </div>`;
+
+  const typeTag = {
+    'New Student': 'student', 'Complaint': 'complaint', 'Payment': 'payment', 'Room Booking': 'room'
+  };
+
+  document.getElementById('activityCard').innerHTML = `
+    <h3>Recent Activity</h3>
+    ${data.recent_activity.length === 0 ? '<div class="empty-state"><i class="fas fa-clock"></i><p>No recent activity</p></div>' :
+      data.recent_activity.map(a => `
+        <div class="activity-item">
+          <span class="activity-tag ${typeTag[a.type]||'student'}">${a.type}</span>
+          <div>
+            <div class="activity-text">${a.message}</div>
+            <div class="activity-time">${new Date(a.created_at).toLocaleString()}</div>
+          </div>
+        </div>`).join('')}`;
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
